@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Citizen Report Form</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 2rem auto; }
+    h1 { text-align: center; }
+    label { display: block; margin-top: 1rem; }
+    input, textarea, button {
+      width: 100%; padding: 0.5rem; margin-top: 0.3rem;
+    }
+    button { background-color: #007bff; color: blue; border: none; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+  <h1>Report an Incident</h1>
+  <form id="reportForm">
+    <label>Name:<input type="text" name="name" required></label>
+    <label>Phone:<input type="text" name="phone" required></label>
+    <label>Description:<textarea name="description" required></textarea></label>
+    <button type="submit">Submit Report</button>
+  </form>
+
+  <h2>Submitted Reports</h2>
+  <ul id="reportsList"></ul>
+
+  <script>
+    const form = document.getElementById('reportForm');
+    const reportsList = document.getElementById('reportsList');
+    const reports = [];
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      // Get form data
+      const data = new FormData(form);
+      const name = data.get('name');
+      const phone = data.get('phone');
+      const description = data.get('description');
+
+      // Try to get the user's location
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          position => {
+            const lat = position.coords.latitude.toFixed(5);
+            const lon = position.coords.longitude.toFixed(5);
+
+            const report = { name, phone, description, lat, lon };
+            reports.push(report);
+
+            const li = document.createElement('li');
+            li.textContent = `${report.name} (${report.phone}): ${report.description} [Location: ${lat}, ${lon}]`;
+            reportsList.appendChild(li);
+
+            form.reset();
+          },
+          error => {
+            alert('Location access denied or unavailable. Saving report without location.');
+            const report = { name, phone, description };
+            reports.push(report);
+
+            const li = document.createElement('li');
+            li.textContent = `${report.name} (${report.phone}): ${report.description}`;
+            reportsList.appendChild(li);
+
+            form.reset();
+          }
+        );
+      } else {
+        alert('Geolocation not supported in this browser.');
+      }
+    });
+  </script>
+</body>
+</html>
