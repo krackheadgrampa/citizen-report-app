@@ -40,27 +40,26 @@
     const reportsList = document.getElementById('reportsList');
     const reports = [];
 
-    // 1. Initialize the map first
+    // 1. Initialize map & markers first
     const map = L.map('map').setView([20.5937, 78.9629], 5); // Center India
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Feature group to hold all markers
     const markers = L.featureGroup().addTo(map);
 
-    // 2. Load existing reports from local storage
+    // 2. Load saved reports from localStorage
     const savedReports = JSON.parse(localStorage.getItem('reports')) || [];
     savedReports.forEach(report => {
       reports.push(report);
 
-      // Add to report list
+      // List entry
       const li = document.createElement('li');
       li.textContent = `${report.name} (${report.phone}): ${report.description}` +
                        (report.lat ? ` [Location: ${report.lat}, ${report.lon}]` : ' [Location not available]');
       reportsList.appendChild(li);
 
-      // Add marker if location exists
+      // Marker
       if (report.lat && report.lon) {
         L.marker([report.lat, report.lon])
          .bindPopup(`<b>${report.name}</b><br>${report.description}`)
@@ -68,59 +67,49 @@
       }
     });
 
-    // Adjust map to show all markers
-    if (markers.getLayers().length > 0) {
-      map.fitBounds(markers.getBounds());
-    }
+    // Fit map to show all markers on load
+    if (markers.getLayers().length > 0) map.fitBounds(markers.getBounds());
 
-    // 3. Form submit
+    // 3. Form submit handler
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-
       const data = new FormData(form);
       const name = data.get('name');
       const phone = data.get('phone');
       const description = data.get('description');
 
+      const saveReport = (lat, lon) => {
+        const report = { name, phone, description };
+        if (lat && lon) { report.lat = lat; report.lon = lon; }
+
+        reports.push(report);
+        localStorage.setItem('reports', JSON.stringify(reports));
+
+        // Add to list
+        const li = document.createElement('li');
+        li.textContent = `${name} (${phone}): ${description}` +
+                         (lat && lon ? ` [Location: ${lat}, ${lon}]` : ' [Location not available]');
+        reportsList.appendChild(li);
+
+        // Add marker if available
+        if (lat && lon) {
+          L.marker([lat, lon])
+            .bindPopup(`<b>${name}</b><br>${description}`)
+            .addTo(markers);
+          map.fitBounds(markers.getBounds());
+        }
+
+        form.reset();
+      };
+
+      // Get geolocation
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          position => {
-            const lat = position.coords.latitude.toFixed(5);
-            const lon = position.coords.longitude.toFixed(5);
-
-            const report = { name, phone, description, lat, lon };
-
-            // Add marker
-            L.marker([lat, lon])
-              .bindPopup(`<b>${name}</b><br>${description}`)
-              .addTo(markers);
-
-            // Fit map
-            map.fitBounds(markers.getBounds());
-
-            reports.push(report);
-            localStorage.setItem('reports', JSON.stringify(reports));
-
-            const li = document.createElement('li');
-            li.textContent = `${name} (${phone}): ${description} [Location: ${lat}, ${lon}]`;
-            reportsList.appendChild(li);
-
-            form.reset();
-          },
-          error => {
-            const report = { name, phone, description };
-            reports.push(report);
-            localStorage.setItem('reports', JSON.stringify(reports));
-
-            const li = document.createElement('li');
-            li.textContent = `${name} (${phone}): ${description} [Location not available]`;
-            reportsList.appendChild(li);
-
-            form.reset();
-          }
+          pos => saveReport(pos.coords.latitude.toFixed(5), pos.coords.longitude.toFixed(5)),
+          () => saveReport(null, null) // If denied/unavailable
         );
       } else {
-        alert('Geolocation is not supported in this browser.');
+        saveReport(null, null); // Not supported
       }
     });
   </script>
