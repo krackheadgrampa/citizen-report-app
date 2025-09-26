@@ -20,27 +20,26 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
- <!-- Firebase SDKs (compat for simple global firebase.*) -->
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"></script>
 
-<script>
-  // Your Firebase Config
-  const firebaseConfig = {
-    apiKey: "AIzaSyBwGB7avEm9fd2DMAImhsGhuzvk4Wres0U",
-    authDomain: "citizen-data-6ca2c.firebaseapp.com",
-    projectId: "citizen-data-6ca2c",
-    storageBucket: "citizen-data-6ca2c.firebasestorage.app",
-    messagingSenderId: "671308471365",
-    appId: "1:671308471365:web:1148246a6a7bc0af68172c",
-    measurementId: "G-6LCP0CRNJ3"
-  };
+  <script>
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBwGB7avEm9fd2DMAImhsGhuzvk4Wres0U",
+      authDomain: "citizen-data-6ca2c.firebaseapp.com",
+      projectId: "citizen-data-6ca2c",
+      storageBucket: "citizen-data-6ca2c.firebasestorage.app",
+      messagingSenderId: "671308471365",
+      appId: "1:671308471365:web:1148246a6a7bc0af68172c",
+      measurementId: "G-6LCP0CRNJ3"
+    };
 
-  // Initialize Firebase (compat style)
-  firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
-</script>
-
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+  </script>
 </head>
 <body>
   <h1>Report an Incident</h1>
@@ -51,6 +50,10 @@
     <button type="submit">Submit Report</button>
   </form>
 
+  <div id="successMessage" style="display:none; color: green; margin-top: 1rem;">
+    Report submitted successfully!
+  </div>
+
   <h2>Submitted Reports</h2>
   <ul id="reportsList"></ul>
 
@@ -60,16 +63,15 @@
   <script>
     const form = document.getElementById('reportForm');
     const reportsList = document.getElementById('reportsList');
-    const reports = [];
 
-    // Initialize the map and markers first
-    const map = L.map('map').setView([20.5937, 78.9629], 5); // Centered on India
+    // Initialize map
+    const map = L.map('map').setView([20.5937, 78.9629], 5); // India center
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     const markers = L.featureGroup().addTo(map);
 
-    // Form submit handling
+    // Handle form submission
     form.addEventListener('submit', function(e) {
       e.preventDefault();
 
@@ -83,40 +85,24 @@
           position => {
             const lat = position.coords.latitude.toFixed(5);
             const lon = position.coords.longitude.toFixed(5);
-
             const report = { name, phone, description, lat, lon };
 
-            // Add marker
-            L.marker([lat, lon])
-              .bindPopup(`<b>${name}</b><br>${description}`)
-              .addTo(markers);
-            map.fitBounds(markers.getBounds());
-
-            // Save to Firestore
             db.collection("reports").add(report)
-              .then(() => console.log("Report saved to Firestore"))
+              .then(() => {
+                console.log("Report saved to Firestore");
+                const messageDiv = document.getElementById('successMessage');
+                messageDiv.style.display = 'block';
+                setTimeout(() => { messageDiv.style.display = 'none'; }, 3000);
+              })
               .catch(err => console.error("Error saving: ", err));
-
-            // Add to list
-            const li = document.createElement('li');
-            li.textContent = `${name} (${phone}): ${description} [Location: ${lat}, ${lon}]`;
-            reportsList.appendChild(li);
 
             form.reset();
           },
           error => {
             const report = { name, phone, description };
-
-            // Save to Firestore
             db.collection("reports").add(report)
               .then(() => console.log("Report saved to Firestore (no location)"))
               .catch(err => console.error("Error saving: ", err));
-
-            // Add to list
-            const li = document.createElement('li');
-            li.textContent = `${name} (${phone}): ${description} [Location not available]`;
-            reportsList.appendChild(li);
-
             form.reset();
           }
         );
@@ -124,34 +110,33 @@
         alert('Geolocation is not supported in this browser.');
       }
     });
-    // ✅ Real-time Firestore listener (just JS, no <script> tags)
-  db.collection("reports").onSnapshot((snapshot) => {
-    reportsList.innerHTML = '';    // Clear current list
-    markers.clearLayers();         // Clear all markers
 
-    snapshot.forEach(doc => {
-      const report = doc.data();
+    // Real-time Firestore listener
+    db.collection("reports").onSnapshot((snapshot) => {
+      reportsList.innerHTML = '';    
+      markers.clearLayers();         
 
-      // Add to the list
-      const li = document.createElement('li');
-      li.textContent = `${report.name} (${report.phone}): ${report.description}` +
-                       (report.lat ? ` [Location: ${report.lat}, ${report.lon}]` : ' [Location not available]');
-      reportsList.appendChild(li);
+      snapshot.forEach(doc => {
+        const report = doc.data();
 
-      // Add marker if location exists
-      if (report.lat && report.lon) {
-        L.marker([report.lat, report.lon])
-          .bindPopup(`<b>${report.name}</b><br>${report.description}`)
-          .addTo(markers);
+        // Add to list
+        const li = document.createElement('li');
+        li.textContent = `${report.name} (${report.phone}): ${report.description}` +
+                         (report.lat ? ` [Location: ${report.lat}, ${report.lon}]` : ' [Location not available]');
+        reportsList.appendChild(li);
+
+        // Add marker if location exists
+        if (report.lat && report.lon) {
+          L.marker([report.lat, report.lon])
+            .bindPopup(`<b>${report.name}</b><br>${report.description}`)
+            .addTo(markers);
+        }
+      });
+
+      if (markers.getLayers().length > 0) {
+        map.fitBounds(markers.getBounds());
       }
     });
-
-    // Adjust map view to show all markers
-    if (markers.getLayers().length > 0) {
-      map.fitBounds(markers.getBounds());
-    }
-  });
   </script>
 </body>
 </html>
-
