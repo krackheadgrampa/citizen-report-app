@@ -3,17 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Citizen Report Form</title>
+  <title>Smart Incident Reporting</title>
 
   <style>
     body { font-family: Arial, sans-serif; max-width: 600px; margin: 2rem auto; }
-    h1 { text-align: center; }
+    h1, h2 { text-align: center; }
     label { display: block; margin-top: 1rem; }
     input, textarea, button {
       width: 100%; padding: 0.5rem; margin-top: 0.3rem;
     }
     button { background-color: #007bff; color: white; border: none; cursor: pointer; }
     button:hover { background-color: #0056b3; }
+    ul { list-style: none; padding-left: 0; }
   </style>
 
   <!-- Leaflet CSS & JS -->
@@ -21,11 +22,28 @@
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
   <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+</head>
+<body>
+  <h1>Smart Incident Reporting</h1>
+
+  <form id="reportForm">
+    <label>Name:<input type="text" name="name" required></label>
+    <label>Phone:<input type="text" name="phone" required></label>
+    <label>Description:<textarea name="description" required></textarea></label>
+    <button type="submit">Submit Report</button>
+  </form>
+
+  <h2>Submitted Reports</h2>
+  <ul id="reportsList"></ul>
+
+  <h2>Map of Reports</h2>
+  <div id="map" style="height: 400px; width: 100%; margin-top: 1rem;"></div>
 
   <script>
-    // Firebase Config
+    // ===== Firebase Config =====
     const firebaseConfig = {
       apiKey: "AIzaSyBwGB7avEm9fd2DMAImhsGhuzvk4Wres0U",
       authDomain: "citizen-data-6ca2c.firebaseapp.com",
@@ -35,107 +53,96 @@
       appId: "1:671308471365:web:1148246a6a7bc0af68172c",
       measurementId: "G-6LCP0CRNJ3"
     };
-
-    // Initialize Firebase
-    const app = firebase.initializeApp(firebaseConfig);
+    firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
-  </script>
-</head>
-<body>
-  <h1>Report an Incident</h1>
-  <form id="reportForm">
-    <label>Name:<input type="text" name="name" required></label>
-    <label>Phone:<input type="text" name="phone" required></label>
-    <label>Description:<textarea name="description" required></textarea></label>
-    <button type="submit">Submit Report</button>
-  </form>
 
-  <div id="successMessage" style="display:none; color: green; margin-top: 1rem;">
-    Report submitted successfully!
-  </div>
-
-  <h2>Submitted Reports</h2>
-  <ul id="reportsList"></ul>
-
-  <h2>Map of Reports</h2>
-  <div id="map" style="height: 400px; width: 100%; margin-top: 1rem;"></div>
-
-  <script>
     const form = document.getElementById('reportForm');
     const reportsList = document.getElementById('reportsList');
 
-    // Initialize map
-    const map = L.map('map').setView([20.5937, 78.9629], 5); // India center
+    // ===== Initialize Map =====
+    const map = L.map('map').setView([20.5937, 78.9629], 5); // India
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     const markers = L.featureGroup().addTo(map);
 
-    // Handle form submission
+    // ===== AI Categorization (keyword-based placeholder) =====
+    function categorizeIncident(description) {
+      const desc = description.toLowerCase();
+      if (desc.includes("fire") || desc.includes("burn")) return "Fire";
+      if (desc.includes("accident") || desc.includes("crash")) return "Accident";
+      if (desc.includes("robbery") || desc.includes("theft") || desc.includes("assault")) return "Crime";
+      if (desc.includes("hazard") || desc.includes("flood") || desc.includes("spill")) return "Hazard";
+      return "Other";
+    }
+
+    const categoryColors = {
+      "Accident": "red",
+      "Fire": "orange",
+      "Crime": "purple",
+      "Hazard": "yellow",
+      "Other": "blue"
+    };
+
+    // ===== Form Submission =====
     form.addEventListener('submit', function(e) {
       e.preventDefault();
-
       const data = new FormData(form);
       const name = data.get('name');
       const phone = data.get('phone');
       const description = data.get('description');
+      const category = categorizeIncident(description);
+
+      const saveReport = (lat, lon) => {
+        const report = { name, phone, description, category };
+        if (lat && lon) { report.lat = lat; report.lon = lon; }
+
+        db.collection("reports").add(report)
+          .then(() => console.log("Report saved"))
+          .catch(err => console.error("Error saving: ", err));
+
+        form.reset();
+      };
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          position => {
-            const lat = position.coords.latitude.toFixed(5);
-            const lon = position.coords.longitude.toFixed(5);
-            const report = { name, phone, description, lat, lon };
-
-            db.collection("reports").add(report)
-              .then(() => {
-                console.log("Report saved to Firestore");
-                const messageDiv = document.getElementById('successMessage');
-                messageDiv.style.display = 'block';
-                setTimeout(() => { messageDiv.style.display = 'none'; }, 3000);
-              })
-              .catch(err => console.error("Error saving: ", err));
-
-            form.reset();
-          },
-          error => {
-            const report = { name, phone, description };
-            db.collection("reports").add(report)
-              .then(() => console.log("Report saved to Firestore (no location)"))
-              .catch(err => console.error("Error saving: ", err));
-            form.reset();
-          }
+          pos => saveReport(pos.coords.latitude.toFixed(5), pos.coords.longitude.toFixed(5)),
+          err => saveReport(null, null)
         );
       } else {
-        alert('Geolocation is not supported in this browser.');
+        saveReport(null, null);
       }
     });
 
-    // Real-time Firestore listener
-    db.collection("reports").onSnapshot((snapshot) => {
-      reportsList.innerHTML = '';    
-      markers.clearLayers();         
+    // ===== Real-time Firestore Listener =====
+    db.collection("reports").onSnapshot(snapshot => {
+      reportsList.innerHTML = '';
+      markers.clearLayers();
 
       snapshot.forEach(doc => {
         const report = doc.data();
 
-        // Add to list
+        // List item with category
         const li = document.createElement('li');
-        li.textContent = `${report.name} (${report.phone}): ${report.description}` +
+        li.textContent = `${report.name} (${report.phone}): ${report.description} [${report.category}]` +
                          (report.lat ? ` [Location: ${report.lat}, ${report.lon}]` : ' [Location not available]');
         reportsList.appendChild(li);
 
-        // Add marker if location exists
+        // Marker with category color
         if (report.lat && report.lon) {
-          L.marker([report.lat, report.lon])
-            .bindPopup(`<b>${report.name}</b><br>${report.description}`)
-            .addTo(markers);
+          const marker = L.circleMarker([report.lat, report.lon], {
+            radius: 8,
+            fillColor: categoryColors[report.category] || "blue",
+            color: "#000",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.8
+          }).bindPopup(`<b>${report.name}</b><br>${report.description}<br><b>Category:</b> ${report.category}`);
+          markers.addLayer(marker);
         }
       });
 
-      if (markers.getLayers().length > 0) {
-        map.fitBounds(markers.getBounds());
-      }
+      if (markers.getLayers().length > 0) map.fitBounds(markers.getBounds());
     });
   </script>
 </body>
