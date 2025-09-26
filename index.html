@@ -20,26 +20,27 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"></script>
+ <!-- Firebase SDKs (compat for simple global firebase.*) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <script>
-    // ✅ Your Firebase Config
-    const firebaseConfig = {
-      apiKey: "AIzaSyBwGB7avEm9fd2DMAImhsGhuzvk4Wres0U",
-      authDomain: "citizen-data-6ca2c.firebaseapp.com",
-      projectId: "citizen-data-6ca2c",
-      storageBucket: "citizen-data-6ca2c.firebasestorage.app",
-      messagingSenderId: "671308471365",
-      appId: "1:671308471365:web:1148246a6a7bc0af68172c",
-      measurementId: "G-6LCP0CRNJ3"
-    };
+<script>
+  // Your Firebase Config
+  const firebaseConfig = {
+    apiKey: "AIzaSyBwGB7avEm9fd2DMAImhsGhuzvk4Wres0U",
+    authDomain: "citizen-data-6ca2c.firebaseapp.com",
+    projectId: "citizen-data-6ca2c",
+    storageBucket: "citizen-data-6ca2c.firebasestorage.app",
+    messagingSenderId: "671308471365",
+    appId: "1:671308471365:web:1148246a6a7bc0af68172c",
+    measurementId: "G-6LCP0CRNJ3"
+  };
 
-    // Initialize Firebase
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-  </script>
+  // Initialize Firebase (compat style)
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+</script>
+
 </head>
 <body>
   <h1>Report an Incident</h1>
@@ -123,6 +124,34 @@
         alert('Geolocation is not supported in this browser.');
       }
     });
+    // ✅ Real-time Firestore listener (just JS, no <script> tags)
+  db.collection("reports").onSnapshot((snapshot) => {
+    reportsList.innerHTML = '';    // Clear current list
+    markers.clearLayers();         // Clear all markers
+
+    snapshot.forEach(doc => {
+      const report = doc.data();
+
+      // Add to the list
+      const li = document.createElement('li');
+      li.textContent = `${report.name} (${report.phone}): ${report.description}` +
+                       (report.lat ? ` [Location: ${report.lat}, ${report.lon}]` : ' [Location not available]');
+      reportsList.appendChild(li);
+
+      // Add marker if location exists
+      if (report.lat && report.lon) {
+        L.marker([report.lat, report.lon])
+          .bindPopup(`<b>${report.name}</b><br>${report.description}`)
+          .addTo(markers);
+      }
+    });
+
+    // Adjust map view to show all markers
+    if (markers.getLayers().length > 0) {
+      map.fitBounds(markers.getBounds());
+    }
+  });
   </script>
 </body>
 </html>
+
